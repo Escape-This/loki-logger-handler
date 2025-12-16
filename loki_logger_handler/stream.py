@@ -72,7 +72,7 @@ class Stream(object):
             # Fallback to the current time in nanoseconds if the timestamp is missing or invalid
             timestamp = str(time_ns())
         
-        formatted_value = json.dumps(value, ensure_ascii=False) if self.message_in_json_format else value
+        formatted_value = json.dumps(value, ensure_ascii=False) if self.message_in_json_format and isinstance(value, dict) else value
         if metadata or self.loki_metadata:
             # Ensure both metadata and self.loki_metadata are dictionaries (default to empty dict if None)
             metadata = metadata if metadata is not None else {}

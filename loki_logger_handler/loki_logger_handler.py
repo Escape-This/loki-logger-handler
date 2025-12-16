@@ -1,4 +1,6 @@
 # Compatibility for Python 2 and 3 queue module
+import re
+
 try:
     import queue  # Python 3.x
 except ImportError:
@@ -9,7 +11,10 @@ import logging
 import threading
 import requests
 
-from loki_logger_handler.formatters.logger_formatter import LoggerFormatter
+from loki_logger_handler.formatters.logger_formatter import (
+    LoggerFormatter,
+    LoggerProcessor,
+)
 from loki_logger_handler.loki_request import LokiRequest
 from loki_logger_handler.stream import Stream
 from loki_logger_handler.streams import Streams
@@ -31,6 +36,7 @@ class LokiLoggerHandler(logging.Handler):
         timeout=10,
         compressed=True,
         default_formatter=LoggerFormatter(),
+        default_processor=LoggerProcessor(),
         enable_self_errors=False,
         enable_structured_loki_metadata=False,
         loki_metadata=None,
@@ -61,6 +67,7 @@ class LokiLoggerHandler(logging.Handler):
         self.label_keys = label_keys if label_keys is not None else {}
         self.timeout = timeout
         self.formatter = default_formatter
+        self.processor = default_processor
 
         self.enable_self_errors = enable_self_errors
 
@@ -92,6 +99,9 @@ class LokiLoggerHandler(logging.Handler):
         self.loki_metadata = loki_metadata
         self.loki_metadata_keys = loki_metadata_keys if loki_metadata_keys is not None else []
 
+    def setProcessor(self, processor):
+        self.processor = processor
+
     def emit(self, record):
         """
         Emit a log record.
@@ -100,8 +110,10 @@ class LokiLoggerHandler(logging.Handler):
             record (logging.LogRecord): The log record to be emitted.
         """
         try:
-            formatted_record, log_loki_metadata = self.formatter.format(record)
-            self._put(formatted_record, log_loki_metadata)
+            record_dict, log_loki_metadata = self.processor.process(record)
+            formatted_record = self.formatter.format(record)
+            formatted_record = re.sub(r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}] ", "", formatted_record)
+            self._put(formatted_record, record_dict, log_loki_metadata)
         except Exception as e:
              self.handle_unexpected_error(e)
 
@@ -160,23 +172,26 @@ class LokiLoggerHandler(logging.Handler):
         """
         self.emit(message.record)
 
-    def _put(self, log_record, log_loki_metadata):
+    def _put(self, formatted_record: str, record_dict: dict, log_loki_metadata: dict):
         """
         Put a log record into the buffer.
 
         Args:
-            log_record (dict): The formatted log record.
+            record_dict (dict): The formatted log record.
         """
         labels = self.labels.copy()
 
-        self.assign_labels_from_log(log_record, labels)
+        self.assign_labels_from_log(record_dict, labels)
 
         if self.enable_structured_loki_metadata:
-            self.extract_and_clean_metadata(log_record, log_loki_metadata)
+            self.extract_and_clean_metadata(record_dict, log_loki_metadata)
 
-            log_line = LogLine(labels, log_record, log_loki_metadata)
+            if isinstance(self.formatter, LoggerFormatter):
+                formatted_record = record_dict
+
+            log_line = LogLine(labels, formatted_record, log_loki_metadata)
         else:
-            log_line = LogLine(labels, log_record)
+            log_line = LogLine(labels, formatted_record)
 
         self.buffer.put(log_line)
 
@@ -245,7 +260,7 @@ class LogLine:
         line (str): The actual log line content.
     """
 
-    def __init__(self, labels, line, loki_metadata=None):
+    def __init__(self, labels: dict, line: str, loki_metadata: dict=None):
         """
         Initialize a LogLine object.
 

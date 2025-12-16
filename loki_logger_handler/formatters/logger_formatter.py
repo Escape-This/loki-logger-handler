@@ -1,7 +1,8 @@
+import json
 import traceback
 import time
 
-class LoggerFormatter:
+class LoggerProcessor:
     """
     A custom formatter for log records that formats the log record into a structured dictionary.
     """
@@ -31,7 +32,7 @@ class LoggerFormatter:
     def __init__(self):
         pass
 
-    def format(self, record):
+    def process(self, record):
         """
         Format a log record into a structured dictionary.
 
@@ -58,7 +59,7 @@ class LoggerFormatter:
             key: value for key, value in record.__dict__.items()
             if key not in self.LOG_RECORD_FIELDS
         }
-       
+
         loki_metadata = {}
 
         for key in custom_fields:
@@ -77,6 +78,28 @@ class LoggerFormatter:
             formatted["stacktrace"] = self._format_stacktrace(record.exc_info)
 
         return formatted, loki_metadata
+
+    @staticmethod
+    def _format_stacktrace(exc_info):
+        """
+        Format the stacktrace if exc_info is present.
+
+        Args:
+            exc_info (tuple or None): Exception info tuple as returned by sys.exc_info().
+
+        Returns:
+            str or None: Formatted stacktrace as a string, or None if exc_info is not provided.
+        """
+        if exc_info:
+            return "".join(traceback.format_exception(*exc_info))
+        return None
+
+class LoggerFormatter:
+    def __init__(self):
+        pass
+
+    def format(self, record):
+        return json.dumps(LoggerProcessor().format(record)[0])
 
     @staticmethod
     def _format_stacktrace(exc_info):
