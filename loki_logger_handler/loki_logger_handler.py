@@ -113,6 +113,7 @@ class LokiLoggerHandler(logging.Handler):
             record_dict, log_loki_metadata = self.processor.process(record)
             formatted_record = self.formatter.format(record)
             formatted_record = re.sub(r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}] ", "", formatted_record)
+            formatted_record = formatted_record.replace('\u200b', '')
             self._put(formatted_record, record_dict, log_loki_metadata)
         except Exception as e:
              self.handle_unexpected_error(e)
