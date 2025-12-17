@@ -284,5 +284,5 @@ class LogLine:
         Returns:
             str: A unique key generated from the labels values.
         """
-        key_list = sorted(labels.values())
+        key_list = sorted(str(value) for value in labels.values())
         return "_".join(key_list)
